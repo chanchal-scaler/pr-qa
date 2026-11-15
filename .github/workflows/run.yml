@@ -1,0 +1,39 @@
+name: PR QA
+
+# Reusable workflow. Product repos call it from an issue_comment workflow
+# (see examples/caller-workflow.yml) with `secrets: inherit`.
+on:
+  workflow_call:
+    inputs:
+      model:
+        type: string
+        default: claude-opus-5-5
+      max_budget_usd:
+        type: string
+        default: "10"
+
+jobs:
+  qa:
+    # Gate: a /qa comment on a PR from someone with write access.
+    if: >-
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/qa') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      # Keep this ref in step with the tag callers use for this workflow.
+      - uses: chanchal-scaler/pr-qa@main
+        with:
+          github_token: ${{ github.token }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          jwt_secret: ${{ secrets.QA_JWT_SECRET }}
+          aws_access_key_id: ${{ secrets.QA_LOGS_AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.QA_LOGS_AWS_SECRET_ACCESS_KEY }}
+          model: ${{ inputs.model }}
+          max_budget_usd: ${{ inputs.max_budget_usd }}

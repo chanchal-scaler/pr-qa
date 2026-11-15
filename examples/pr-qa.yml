@@ -1,0 +1,42 @@
+# Copy to .github/pr-qa.yml in the product repo (read from the default branch).
+# Change every "replace me" value.
+
+# URLs given in a /qa comment must be https and match one of these hosts.
+# Never list a production host here.
+allowed_hosts:
+  - "replace me"            # e.g. api.staging.example.com or *.staging.example.com
+
+# Optional shortcuts, so people can write `/qa staging` instead of pasting URLs.
+environments:
+  staging:
+    api_url: "replace me"   # e.g. https://api.staging.example.com
+    fe_url: "replace me"    # e.g. https://app.staging.example.com
+
+# Test users the agent may act as. A short-lived HS256 token is minted per run for
+# each role from the claims listed here, signed with the QA_JWT_SECRET secret.
+auth:
+  strategy: jwt_hs256
+  audience: "replace me"    # remove this line if your tokens have no `aud` claim
+  lifetime_minutes: 120
+  roles:
+    user:  { sub: "replace me", email: "replace me" }
+    admin: { sub: "replace me", email: "replace me" }
+
+# Cookie the frontend reads the access token from (remove if there is no frontend).
+fe_auth:
+  cookie: access_token
+
+# Optional: endpoint that returns the deployed commit, to catch stale deploys.
+# version_url: https://api.staging.example.com/version
+
+# Optional: where server logs live (needs the QA_LOGS_AWS_* secrets, read-only).
+# logs:
+#   type: cloudwatch
+#   region: us-east-1
+#   log_group: /my/staging/log-group
+
+no_touch:
+  - Anything that sends email, SMS or WhatsApp to users
+
+notes: |
+  Anything the agent should know: where the API docs are, route prefixes, known flaky areas.

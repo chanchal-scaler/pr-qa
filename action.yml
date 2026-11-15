@@ -1,0 +1,157 @@
+name: PR QA
+description: Tests what a pull request claims against a deployed staging environment and reports on the PR.
+
+inputs:
+  github_token:
+    description: Token that can read the PR and write PR comments.
+    required: true
+  anthropic_api_key:
+    description: Anthropic API key (preferred).
+    required: false
+  claude_code_oauth_token:
+    description: Token from `claude setup-token`, used when no API key is given.
+    required: false
+  jwt_secret:
+    description: Secret used to mint test-user tokens (auth.strategy jwt_hs256).
+    required: false
+  aws_access_key_id:
+    description: Read-only AWS key for reading staging logs (optional).
+    required: false
+  aws_secret_access_key:
+    description: Secret for aws_access_key_id.
+    required: false
+  model:
+    description: Claude model to use.
+    required: false
+    default: claude-opus-5-5
+  max_budget_usd:
+    description: Spend cap for one run in USD (applies with an API key).
+    required: false
+    default: "10"
+
+runs:
+  using: composite
+  steps:
+    - name: Acknowledge
+      id: ack
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.issue.number }}
+        COMMENT_ID: ${{ github.event.comment.id }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        gh api -X POST "repos/$REPO/issues/comments/$COMMENT_ID/reactions" -f content=eyes >/dev/null || true
+        id=$(gh api -X POST "repos/$REPO/issues/$PR/comments" \
+          -f body="🧪 QA run started. [Follow the run]($RUN_URL)" --jq .id)
+        echo "status_comment_id=$id" >> "$GITHUB_OUTPUT"
+
+    - name: Check out PR source (read only, never executed)
+      uses: actions/checkout@v4
+      with:
+        ref: refs/pull/${{ github.event.issue.number }}/head
+        path: pr-src
+        persist-credentials: false
+
+    - name: Collect PR details and repo config
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.issue.number }}
+      run: |
+        mkdir -p qa-in qa-out
+        gh pr view "$PR" --repo "$REPO" \
+          --json number,title,body,author,baseRefName,headRefName,headRefOid,commits,files > qa-in/pr.json
+        gh pr diff "$PR" --repo "$REPO" > qa-in/pr.diff
+        # Config comes from the default branch, so a PR cannot change the rules it is tested under.
+        if ! gh api "repos/$REPO/contents/.github/pr-qa.yml" \
+            -H "Accept: application/vnd.github.raw" > "$RUNNER_TEMP/pr-qa.yml"; then
+          echo "No .github/pr-qa.yml found on the default branch of $REPO." > qa-in/error.txt
+          exit 1
+        fi
+        yq -o=json "$RUNNER_TEMP/pr-qa.yml" > "$RUNNER_TEMP/pr-qa.json"
+
+    - name: Resolve target and mint test tokens
+      shell: bash
+      env:
+        COMMENT_BODY: ${{ github.event.comment.body }}
+        QA_JWT_SECRET: ${{ inputs.jwt_secret }}
+      run: python3 "$GITHUB_ACTION_PATH/scripts/prepare.py" "$RUNNER_TEMP/pr-qa.json" qa-in
+
+    - name: Install agent and browser
+      shell: bash
+      run: |
+        npm install -g @anthropic-ai/claude-code
+        mkdir -p "$RUNNER_TEMP/mcp" && cd "$RUNNER_TEMP/mcp"
+        npm init -y >/dev/null
+        npm install @playwright/mcp
+        ./node_modules/.bin/playwright install --with-deps chromium
+
+    - name: Run QA agent
+      shell: bash
+      env:
+        ANTHROPIC_KEY: ${{ inputs.anthropic_api_key }}
+        OAUTH_TOKEN: ${{ inputs.claude_code_oauth_token }}
+        LOGS_AWS_KEY: ${{ inputs.aws_access_key_id }}
+        LOGS_AWS_SECRET: ${{ inputs.aws_secret_access_key }}
+        MODEL: ${{ inputs.model }}
+        MAX_BUDGET_USD: ${{ inputs.max_budget_usd }}
+      run: |
+        if [ -n "$ANTHROPIC_KEY" ]; then
+          export ANTHROPIC_API_KEY="$ANTHROPIC_KEY"
+        elif [ -n "$OAUTH_TOKEN" ]; then
+          export CLAUDE_CODE_OAUTH_TOKEN="$OAUTH_TOKEN"
+        else
+          echo "Neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is set." > qa-in/error.txt
+          exit 1
+        fi
+        if [ -n "$LOGS_AWS_KEY" ]; then
+          export AWS_ACCESS_KEY_ID="$LOGS_AWS_KEY" AWS_SECRET_ACCESS_KEY="$LOGS_AWS_SECRET"
+        fi
+        unset ANTHROPIC_KEY OAUTH_TOKEN LOGS_AWS_KEY LOGS_AWS_SECRET
+
+        cat > "$RUNNER_TEMP/mcp.json" <<EOF
+        {"mcpServers": {"playwright": {
+          "command": "$RUNNER_TEMP/mcp/node_modules/.bin/playwright-mcp",
+          "args": ["--headless", "--isolated", "--no-sandbox", "--browser", "chromium",
+                   "--output-dir", "$GITHUB_WORKSPACE/qa-out/browser"]}}}
+        EOF
+
+        claude -p "$(cat "$GITHUB_ACTION_PATH/prompts/qa.md")" \
+          --model "$MODEL" \
+          --max-budget-usd "$MAX_BUDGET_USD" \
+          --mcp-config "$RUNNER_TEMP/mcp.json" --strict-mcp-config \
+          --setting-sources user \
+          --allowedTools "Bash" "Read" "Write" "Edit" "Glob" "Grep" "mcp__playwright" \
+          --output-format json > "$RUNNER_TEMP/agent-result.json"
+
+    - name: Post report
+      if: always()
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        REPO: ${{ github.repository }}
+        STATUS_COMMENT_ID: ${{ steps.ack.outputs.status_comment_id }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        [ -n "$STATUS_COMMENT_ID" ] || exit 0
+        body="$RUNNER_TEMP/comment.md"
+        if [ -s qa-out/report.md ]; then
+          head -c 60000 qa-out/report.md > "$body"
+          printf '\n\n---\nScreenshots and browser output are in the [run artifacts](%s).\n' "$RUN_URL" >> "$body"
+        elif [ -s qa-in/error.txt ]; then
+          printf '⚠️ QA run could not start: %s\n' "$(cat qa-in/error.txt)" > "$body"
+        else
+          printf '❌ QA run failed before producing a report. [See the run](%s).\n' "$RUN_URL" > "$body"
+        fi
+        gh api -X PATCH "repos/$REPO/issues/comments/$STATUS_COMMENT_ID" -F body=@"$body" >/dev/null
+
+    - name: Upload evidence
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: pr-qa-${{ github.event.issue.number }}-${{ github.run_id }}
+        path: qa-out/
+        if-no-files-found: ignore

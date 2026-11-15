@@ -1,0 +1,12 @@
+# Copy to .github/workflows/pr-qa.yml in the product repo (must be on the default branch).
+name: PR QA
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  qa:
+    if: github.event.issue.pull_request != null && startsWith(github.event.comment.body, '/qa')
+    uses: chanchal-scaler/pr-qa/.github/workflows/run.yml@main
+    secrets: inherit
