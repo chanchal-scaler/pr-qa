@@ -29,7 +29,7 @@ Only people with write access to the repo (owner, member, collaborator) can trig
 | Secret | Needed | What it is |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | one of these two | Console API key; `max_budget_usd` caps spend per run |
-| `CLAUDE_CODE_OAUTH_TOKEN` | one of these two | Token from `claude setup-token` |
+| `CLAUDE_CODE_OAUTH_TOKEN` | one of these two | Token from `claude setup-token` (also accepted in `ANTHROPIC_API_KEY`; it is recognised by its `sk-ant-oat` prefix) |
 | `QA_JWT_SECRET` | if `auth.strategy: jwt_hs256` | The staging app's JWT signing secret |
 | `QA_LOGS_API_KEY` | optional | API key for the log or trace system in the config's `logs` block (for example SigNoz) |
 | `QA_LOGS_AWS_ACCESS_KEY_ID`, `QA_LOGS_AWS_SECRET_ACCESS_KEY` | optional | Read-only AWS key, if the logs are in CloudWatch |
@@ -55,6 +55,7 @@ message naming it (optional log secrets are simply skipped).
 - `.github/workflows/run.yml`: reusable workflow with the permission gate; calls the action.
 - `action.yml`: collects the PR and config, mints tokens, runs Claude Code headless with a Playwright browser, posts the report.
 - `scripts/prepare.py`: parses the comment, checks URLs against `allowed_hosts`, mints tokens.
+- `scripts/summarize.py`: prints the agent's final status in the log and passes its error message to the PR comment when it fails.
 - `prompts/qa.md`: the agent's brief and report format.
 
 The agent never runs PR code; it only reads it. It gets ready-made tokens for the configured test
@@ -65,4 +66,4 @@ secrets by name, so this workflow never sees a repo's other secrets (deploy keys
 
 - Turn off email and WhatsApp sending in the staging config. The agent is told not to trigger them, but staging holds real users' data, so the config is the real guard.
 - `run.yml` references the action as `scaler-ai/pr-qa@main`; change it if this repo moves.
-- This repo is private, so other repos can only use it while Settings → Actions → General → Access is set to "Accessible from repositories in the organization".
+- This repo is public so that repos in any organization can use it. Keep internal names, URLs and account details out of it; they belong in each product repo's `.github/pr-qa.yml`.
