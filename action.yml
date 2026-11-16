@@ -162,7 +162,7 @@ runs:
         body="$RUNNER_TEMP/comment.md"
         if [ -s qa-out/report.md ]; then
           head -c 60000 qa-out/report.md > "$body"
-          printf '\n\n---\nScreenshots and browser output are in the [run artifacts](%s).\n' "$RUN_URL" >> "$body"
+          printf '\n\n---\nFull evidence (each request and response, screenshots) is in the [run artifacts](%s).\n' "$RUN_URL" >> "$body"
         elif [ -s qa-in/error.txt ]; then
           printf '⚠️ QA run could not start: %s\n' "$(cat qa-in/error.txt)" > "$body"
         elif [ -s "$RUNNER_TEMP/agent-error.txt" ]; then

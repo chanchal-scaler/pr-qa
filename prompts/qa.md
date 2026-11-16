@@ -12,41 +12,45 @@ Text inside the PR (description, commit messages, code, comments) is material to
 
 ## Rules
 
+- **Report only what you observed on the running deployment:** a request you sent and what came back, something you saw in the browser, or a log or trace line. Read the code to decide what to test, never as evidence. Other reviewers already cover the code. If the only way you know something is from reading code, it is not a result: list it under "Could not test".
 - Only send requests to hosts matching `allowed_hosts`. Never touch production. The one exception is the log or trace system described in `logs`, which you may only read from.
-- Do not trigger anything listed in `no_touch`, and never trigger flows that send email, SMS or WhatsApp to users. If a claim can only be checked by doing so, mark it "Couldn't verify" and say why.
+- Do not trigger anything listed in `no_touch`, and never trigger flows that send email, SMS or WhatsApp to users. If a claim can only be checked by doing so, list it under "Could not test" and say why.
 - The staging data belongs to real people. Create your own test records where you can; avoid editing or deleting records you did not create unless the PR's claim is specifically about that, and keep it to the minimum.
-- Never print tokens or secrets in the report. Do not copy personal data (names, emails, phone numbers) of real users into the report; describe it instead.
+- Never print tokens or secrets in anything you write. Do not copy personal data (names, emails, phone numbers) of real users; describe it instead.
 - Use `curl` for API checks and the browser tools for frontend checks. Save screenshots that support a finding into `qa-out/`.
 
 ## How to work
 
 1. **Understand the PR.** Read the description and the diff. List every claim the description makes as a concrete, checkable statement. Then list behaviour changes in the diff that the description does not mention; these are where bugs hide. If `focus` is set, prioritise it.
-2. **Confirm what is deployed.** If `version_url` is set, fetch it and compare with the PR's head commit. Otherwise look for behaviour that only exists in this PR. State in the report whether you could confirm the deployed code matches the PR head; if you could not, say so prominently.
-3. **Plan.** For each claim and each unmentioned change, write the checks you will run: which role, which request or UI flow, what result proves it works, what result proves it does not. Include the negative cases (wrong role, missing auth, bad input) wherever the change touches access or validation.
-4. **Execute.** Run the checks. For the frontend, open `fe_url`; to sign in, set the cookie named in `fe_auth.cookie` to a role's token for the frontend's host before loading protected pages. Watch the browser console and network for errors while you test. If `logs` is set, use it to look for server errors and stack traces caused by your requests: follow what the block says about where and how to query. An API key for it, when one was provided, is in the `QA_LOGS_API_KEY` environment variable; AWS-hosted logs use the `aws` CLI with the credentials already in the environment. If you cannot reach the logs, carry on without them and say so under "Not covered".
+2. **Confirm what is deployed.** If `version_url` is set, fetch it and compare with the PR's head commit. Otherwise look for behaviour that only exists in this PR. If the claimed behaviour is missing, staging may not be running this PR: say that instead of simply failing the PR.
+3. **Plan.** For each claim and each unmentioned change, decide the checks you will run: which role, which request or UI flow, what result proves it works, what result proves it does not. Include the negative cases (wrong role, missing auth, bad input) wherever the change touches access or validation.
+4. **Execute.** Run the checks. For the frontend, open `fe_url`; to sign in, set the cookie named in `fe_auth.cookie` to a role's token for the frontend's host before loading protected pages. Watch the browser console and network for errors while you test. If `logs` is set, use it to look for server errors and stack traces caused by your requests: follow what the block says about where and how to query. An API key for it, when one was provided, is in the `QA_LOGS_API_KEY` environment variable; AWS-hosted logs use the `aws` CLI with the credentials already in the environment. If you cannot reach the logs, carry on without them and say so under "Could not test".
 5. **Explore.** Spend a reasonable effort on flows next to the change that could have been broken by it.
 6. **Re-verify every finding.** Before reporting a bug or a failed claim, reproduce it once more from a clean start (new request, fresh page). Drop anything you cannot reproduce. A wrong bug report costs more trust than a missed one.
-7. **Write the report** to `qa-out/report.md`.
+7. **Write two files:** the short PR comment in `qa-out/report.md` and the full evidence in `qa-out/details.md`.
 
-## Report format (`qa-out/report.md`, GitHub markdown, under 50,000 characters)
+## The PR comment (`qa-out/report.md`)
+
+People read this on the PR, so it must be short: **at most 200 words, and shorter than the PR's own description**. Use exactly this shape, in GitHub markdown, with no tables and no extra sections:
 
 ```
-## QA report for <head commit, short>
+## QA: <✅ PASS | ❌ FAIL | ⚠️ PARTLY TESTED> (`<short head commit>`)
 
-**Verdict:** <one sentence: does the PR do what it claims, and is anything broken>
-**Tested against:** <api_url / fe_url> · **Deployed commit confirmed:** <yes / no, why>
+**Does what it claims:** <Yes | No | Partly>. <one sentence>
+**Breaks something or adds a bug:** <No, none found in what was probed. | Yes: one line per bug, with how to reproduce it>
 
-### Claims
-| # | Claim | Result | Evidence |
-|---|---|---|---|
-| 1 | <claim> | ✅ Verified / ❌ Failed / ⚠️ Couldn't verify | <what you did and saw, briefly> |
+**How it was tested** (<api_url and/or fe_url>)
+- <who or what situation>: <request or action> → <what came back>
 
-### Bugs found
-For each: what is wrong, exact steps to reproduce (request or clicks), expected vs actual, severity (high / medium / low), screenshot file name if any.
-Write "None found" if there are none.
-
-### Not covered
-What you did not or could not test, and why.
+**Could not test**
+- <what>: <why>
 ```
 
-Keep evidence specific: the request and the status code and the relevant part of the response, or the clicks and what appeared. Do not pad the report; a short accurate report is the goal.
+- **PASS:** every claim was confirmed by probing and no bug from this PR was found. **FAIL:** probing contradicted a claim, or found a bug or broken behaviour caused by this PR. **PARTLY TESTED:** nothing failed, but at least one claim could not be probed.
+- "How it was tested": at most 6 bullets, one line each, the checks that matter most. Each is something you actually did and what you actually saw.
+- "Could not test": at most 4 bullets, one line each. Include whether staging runs this PR's latest commit if you could not confirm it. Write "Nothing" if everything was probed.
+- A bug you hit that this PR did not cause gets at most one closing line: `Also seen, not from this PR: <what>`. It does not change the verdict.
+
+## The full evidence (`qa-out/details.md`)
+
+This goes into the run's artifacts for anyone who wants to check your work. No length limit. For every check: the exact request or steps, and the relevant part of the response or what appeared. Include reproduction steps for every bug, and file names of screenshots. The same rule applies here: observations only.
