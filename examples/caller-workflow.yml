@@ -8,5 +8,18 @@ on:
 jobs:
   qa:
     if: github.event.issue.pull_request != null && startsWith(github.event.comment.body, '/qa')
-    uses: chanchal-scaler/pr-qa/.github/workflows/run.yml@main
-    secrets: inherit
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    uses: scaler-ai/pr-qa/.github/workflows/run.yml@main
+    # Pass only the QA secrets by name; do not use `secrets: inherit`, which would
+    # hand over every secret in this repo.
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      QA_JWT_SECRET: ${{ secrets.QA_JWT_SECRET }}
+      QA_LOGS_API_KEY: ${{ secrets.QA_LOGS_API_KEY }}
+      # Optional alternatives:
+      # CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # QA_LOGS_AWS_ACCESS_KEY_ID: ${{ secrets.QA_LOGS_AWS_ACCESS_KEY_ID }}
+      # QA_LOGS_AWS_SECRET_ACCESS_KEY: ${{ secrets.QA_LOGS_AWS_SECRET_ACCESS_KEY }}

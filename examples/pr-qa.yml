@@ -29,11 +29,14 @@ fe_auth:
 # Optional: endpoint that returns the deployed commit, to catch stale deploys.
 # version_url: https://api.staging.example.com/version
 
-# Optional: where server logs live (needs the QA_LOGS_AWS_* secrets, read-only).
+# Optional: where server logs or traces live. The block is passed to the agent as written,
+# so describe where to look and how to query. Credentials come from secrets:
+# QA_LOGS_API_KEY (exposed to the agent under that name) or QA_LOGS_AWS_* for CloudWatch.
 # logs:
-#   type: cloudwatch
-#   region: us-east-1
-#   log_group: /my/staging/log-group
+#   type: signoz
+#   url: https://signoz.example.com
+#   service: my-staging-service
+#   how: Send the key from the QA_LOGS_API_KEY env var in the SIGNOZ-API-KEY header.
 
 no_touch:
   - Anything that sends email, SMS or WhatsApp to users

@@ -31,7 +31,11 @@ Only people with write access to the repo (owner, member, collaborator) can trig
 | `ANTHROPIC_API_KEY` | one of these two | Console API key; `max_budget_usd` caps spend per run |
 | `CLAUDE_CODE_OAUTH_TOKEN` | one of these two | Token from `claude setup-token` |
 | `QA_JWT_SECRET` | if `auth.strategy: jwt_hs256` | The staging app's JWT signing secret |
-| `QA_LOGS_AWS_ACCESS_KEY_ID`, `QA_LOGS_AWS_SECRET_ACCESS_KEY` | optional | Read-only key for staging logs |
+| `QA_LOGS_API_KEY` | optional | API key for the log or trace system in the config's `logs` block (for example SigNoz) |
+| `QA_LOGS_AWS_ACCESS_KEY_ID`, `QA_LOGS_AWS_SECRET_ACCESS_KEY` | optional | Read-only AWS key, if the logs are in CloudWatch |
+
+A secret or config value left as `replace me` is treated as not filled in: the run stops with a
+message naming it (optional log secrets are simply skipped).
 
 ## Config reference (`.github/pr-qa.yml`)
 
@@ -42,7 +46,7 @@ Only people with write access to the repo (owner, member, collaborator) can trig
 | `auth` | no | Test users per role. `jwt_hs256` mints a short-lived token per role from the claims you list (`sub`, `email`, ...). |
 | `fe_auth.cookie` | no | Cookie the frontend reads the access token from. |
 | `version_url` | no | Endpoint returning the deployed commit; lets the report confirm it tested the PR head. |
-| `logs` | no | Where server logs are, passed to the agent as a hint. |
+| `logs` | no | Where server logs or traces are and how to query them, passed to the agent as written. |
 | `no_touch` | no | Things the agent must not trigger. |
 | `notes` | no | Anything else worth knowing about the app. |
 
@@ -54,10 +58,11 @@ Only people with write access to the repo (owner, member, collaborator) can trig
 - `prompts/qa.md`: the agent's brief and report format.
 
 The agent never runs PR code; it only reads it. It gets ready-made tokens for the configured test
-users, not the signing secret, and no GitHub token.
+users, not the signing secret, and no GitHub token. The caller workflow passes only the QA
+secrets by name, so this workflow never sees a repo's other secrets (deploy keys and the like).
 
 ## Before the first run
 
 - Turn off email and WhatsApp sending in the staging config. The agent is told not to trigger them, but staging holds real users' data, so the config is the real guard.
-- `run.yml` references the action as `chanchal-scaler/pr-qa@main`; change it if this repo moves.
-- If your organization restricts which actions may run, allow `chanchal-scaler/pr-qa`.
+- `run.yml` references the action as `scaler-ai/pr-qa@main`; change it if this repo moves.
+- This repo is private, so other repos can only use it while Settings → Actions → General → Access is set to "Accessible from repositories in the organization".
