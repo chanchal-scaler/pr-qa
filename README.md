@@ -49,7 +49,7 @@ message naming it (optional log secrets are simply skipped).
 | `auth` | no | Test users per role. `jwt_hs256` mints a short-lived token per role from the claims you list (`sub`, `email`, ...). |
 | `fe_auth.cookie` | no | Cookie the frontend reads the access token from. |
 | `version_url` | no | Endpoint returning the deployed commit; lets the report confirm it tested the PR head. |
-| `logs` | no | Where server logs or traces are and how to query them, passed to the agent as written. |
+| `logs` | no | Where server logs or traces are and how to query them, passed to the agent as written. For `type: signoz` the agent also has built-in guidance on which API to use. |
 | `no_touch` | no | Things the agent must not trigger. |
 | `notes` | no | Anything else worth knowing about the app. |
 
