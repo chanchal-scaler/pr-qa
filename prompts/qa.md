@@ -39,17 +39,18 @@ If `logs` is set, use it to look for server errors and stack traces caused by yo
 For `logs.type: signoz`:
 
 - Send the key in the `SIGNOZ-API-KEY` header.
-- Use `POST <url>/api/v3/query_range` with a builder query on the `traces` data source and panel type `list`. This form has been seen to return request spans; `/api/v5/query_range` has been seen to return no rows for the same service.
-- Filter on the span `name` containing part of the path you called, within your time window (`start` and `end` in milliseconds). Add a `serviceName` filter equal to `logs.service` only once the name filter finds your requests.
-- Useful columns: `serviceName`, `name`, `responseStatusCode`, `hasError`, `traceID`. For a span with `hasError` true, fetch the whole trace by its ID (for example `GET <url>/api/v1/traces/<traceID>`) to read the exception and stack trace.
-- A starting payload; adjust it if the API rejects a field:
+- Use `POST <url>/api/v3/query_range` with the payload below (checked against SigNoz v0.87; adjust it if another version rejects a field). `start` and `end` are your time window in milliseconds. Do not use `/api/v5/query_range`: it has returned no rows for the same data.
+- The `name` filter matches spans whose name contains part of the path you called. The `spanKind = Server` filter keeps one row per request; without it each request also shows child spans named `… http send` and `… http receive`.
+- Each row carries `name`, `responseStatusCode`, `hasError` and `traceID`. A request that crashed has `hasError` true and may have an empty `responseStatusCode`, so look for errors by adding a filter on `hasError` (dataType `bool`, op `=`, value `true`), not by status code. To narrow to one service, add a `serviceName` filter equal to `logs.service`.
+- For a row with `hasError` true, `GET <url>/api/v1/traces/<traceID>` returns the whole trace, including the exception message and stack trace.
 
 ```json
 {"start": 0, "end": 0, "step": 60,
  "compositeQuery": {"queryType": "builder", "panelType": "list",
   "builderQueries": {"A": {"queryName": "A", "dataSource": "traces", "aggregateOperator": "noop", "expression": "A", "disabled": false,
    "filters": {"op": "AND", "items": [
-     {"key": {"key": "name", "dataType": "string", "type": "tag", "isColumn": true}, "op": "contains", "value": "<part of the path>"}]},
+     {"key": {"key": "name", "dataType": "string", "type": "tag", "isColumn": true}, "op": "contains", "value": "<part of the path>"},
+     {"key": {"key": "spanKind", "dataType": "string", "type": "tag", "isColumn": true}, "op": "=", "value": "Server"}]},
    "selectColumns": [
      {"key": "serviceName", "dataType": "string", "type": "tag", "isColumn": true},
      {"key": "name", "dataType": "string", "type": "tag", "isColumn": true},
