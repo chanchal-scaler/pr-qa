@@ -58,7 +58,8 @@ message naming it (optional log secrets are simply skipped).
 - `prompts/qa.md`: the agent's brief and report format.
 
 The agent never runs PR code; it only reads it. It gets ready-made tokens for the configured test
-users, not the signing secret, and no GitHub token.
+users, not the signing secret, and no GitHub token. The caller workflow passes only the QA
+secrets by name, so this workflow never sees a repo's other secrets (deploy keys and the like).
 
 ## Before the first run
 

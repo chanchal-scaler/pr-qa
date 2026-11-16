@@ -1,7 +1,8 @@
 name: PR QA
 
 # Reusable workflow. Product repos call it from an issue_comment workflow
-# (see examples/caller-workflow.yml) with `secrets: inherit`.
+# (see examples/caller-workflow.yml) and pass only the secrets named below,
+# so this workflow never sees the calling repo's other secrets.
 on:
   workflow_call:
     inputs:
@@ -11,6 +12,19 @@ on:
       max_budget_usd:
         type: string
         default: "10"
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: false
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: false
+      QA_JWT_SECRET:
+        required: false
+      QA_LOGS_API_KEY:
+        required: false
+      QA_LOGS_AWS_ACCESS_KEY_ID:
+        required: false
+      QA_LOGS_AWS_SECRET_ACCESS_KEY:
+        required: false
 
 jobs:
   qa:
