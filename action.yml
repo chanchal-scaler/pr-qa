@@ -107,7 +107,12 @@ runs:
         is_set() { [ -n "$1" ] && [ "$1" != "replace me" ]; }
 
         if is_set "$ANTHROPIC_KEY"; then
-          export ANTHROPIC_API_KEY="$ANTHROPIC_KEY"
+          # A token from `claude setup-token` (sk-ant-oat...) is not an API key; hand it
+          # to the agent as the login token it is, whichever secret it was stored in.
+          case "$ANTHROPIC_KEY" in
+            sk-ant-oat*) export CLAUDE_CODE_OAUTH_TOKEN="$ANTHROPIC_KEY" ;;
+            *)           export ANTHROPIC_API_KEY="$ANTHROPIC_KEY" ;;
+          esac
         elif is_set "$OAUTH_TOKEN"; then
           export CLAUDE_CODE_OAUTH_TOKEN="$OAUTH_TOKEN"
         else
@@ -129,13 +134,20 @@ runs:
                    "--output-dir", "$GITHUB_WORKSPACE/qa-out/browser"]}}}
         EOF
 
+        # The agent reports failures (bad key, spend cap, ...) in its result, not on stderr,
+        # so keep the result, print a summary, and only then pass on its exit status.
+        set +e
         claude -p "$(cat "$GITHUB_ACTION_PATH/prompts/qa.md")" \
           --model "$MODEL" \
           --max-budget-usd "$MAX_BUDGET_USD" \
           --mcp-config "$RUNNER_TEMP/mcp.json" --strict-mcp-config \
           --setting-sources user \
           --allowedTools "Bash" "Read" "Write" "Edit" "Glob" "Grep" "mcp__playwright" \
-          --output-format json > "$RUNNER_TEMP/agent-result.json"
+          --output-format json > qa-out/agent-result.json
+        status=$?
+        set -e
+        python3 "$GITHUB_ACTION_PATH/scripts/summarize.py" qa-out/agent-result.json "$RUNNER_TEMP/agent-error.txt"
+        exit "$status"
 
     - name: Post report
       if: always()
@@ -153,6 +165,9 @@ runs:
           printf '\n\n---\nScreenshots and browser output are in the [run artifacts](%s).\n' "$RUN_URL" >> "$body"
         elif [ -s qa-in/error.txt ]; then
           printf '⚠️ QA run could not start: %s\n' "$(cat qa-in/error.txt)" > "$body"
+        elif [ -s "$RUNNER_TEMP/agent-error.txt" ]; then
+          printf '❌ The QA agent stopped without a report: %s\n\n[See the run](%s).\n' \
+            "$(cat "$RUNNER_TEMP/agent-error.txt")" "$RUN_URL" > "$body"
         else
           printf '❌ QA run failed before producing a report. [See the run](%s).\n' "$RUN_URL" > "$body"
         fi
