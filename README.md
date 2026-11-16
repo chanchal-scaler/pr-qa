@@ -5,7 +5,10 @@ environment where you deployed it, then reports back on the PR.
 
 It reads the PR description and diff, works out the claims, exercises the deployed API and
 frontend (with a real browser), looks for bugs around the change, re-checks each finding, and
-edits its PR comment with a verdict per claim. Screenshots are attached to the workflow run.
+edits its PR comment with a short report: pass or fail against the PR's claims, whether it broke
+anything, how it was tested, and what could not be tested. The report contains only what the
+agent observed on the running deployment, not conclusions from reading code. The full evidence
+and screenshots are attached to the workflow run.
 
 It does not deploy anything. Deploy the PR first, then ask for QA.
 
