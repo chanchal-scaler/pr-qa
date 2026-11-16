@@ -20,8 +20,27 @@ import time
 from urllib.parse import urlparse
 
 
+PLACEHOLDER = "replace me"
+
+
 class UserError(Exception):
     pass
+
+
+def is_placeholder(value):
+    return isinstance(value, str) and value.strip().lower() == PLACEHOLDER
+
+
+def find_placeholders(value, path=""):
+    """Yield the config paths whose value is still the "replace me" placeholder."""
+    if isinstance(value, dict):
+        for key, item in value.items():
+            yield from find_placeholders(item, f"{path}.{key}" if path else str(key))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            yield from find_placeholders(item, f"{path}[{index}]")
+    elif is_placeholder(value):
+        yield path
 
 
 def parse_comment(body):
@@ -68,8 +87,11 @@ def mint_tokens(auth):
     if auth.get("strategy") != "jwt_hs256":
         raise UserError(f"Unsupported auth.strategy `{auth.get('strategy')}` (supported: jwt_hs256).")
     secret = os.environ.get("QA_JWT_SECRET")
-    if not secret:
-        raise UserError("auth.strategy is jwt_hs256 but the `QA_JWT_SECRET` secret is not set.")
+    if not secret or is_placeholder(secret):
+        raise UserError(
+            "auth.strategy is jwt_hs256 but the `QA_JWT_SECRET` secret is not set "
+            f'(or is still "{PLACEHOLDER}").'
+        )
     now = int(time.time())
     lifetime = int(auth.get("lifetime_minutes", 120)) * 60
     tokens = {}
@@ -82,6 +104,14 @@ def mint_tokens(auth):
 
 
 def build(config, comment_body):
+    placeholders = list(find_placeholders(config))
+    if placeholders:
+        raise UserError(
+            f'.github/pr-qa.yml still has "{PLACEHOLDER}" values: '
+            + ", ".join(f"`{path}`" for path in placeholders)
+            + ". Fill them in, or remove the optional blocks you do not need."
+        )
+
     allowed_hosts = config.get("allowed_hosts") or []
     if not allowed_hosts:
         raise UserError("`allowed_hosts` is missing in .github/pr-qa.yml.")

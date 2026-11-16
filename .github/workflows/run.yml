@@ -27,7 +27,7 @@ jobs:
       pull-requests: write
     steps:
       # Keep this ref in step with the tag callers use for this workflow.
-      - uses: chanchal-scaler/pr-qa@main
+      - uses: scaler-ai/pr-qa@main
         with:
           github_token: ${{ github.token }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -35,5 +35,6 @@ jobs:
           jwt_secret: ${{ secrets.QA_JWT_SECRET }}
           aws_access_key_id: ${{ secrets.QA_LOGS_AWS_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.QA_LOGS_AWS_SECRET_ACCESS_KEY }}
+          logs_api_key: ${{ secrets.QA_LOGS_API_KEY }}
           model: ${{ inputs.model }}
           max_budget_usd: ${{ inputs.max_budget_usd }}

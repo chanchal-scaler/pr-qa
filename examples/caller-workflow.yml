@@ -8,5 +8,5 @@ on:
 jobs:
   qa:
     if: github.event.issue.pull_request != null && startsWith(github.event.comment.body, '/qa')
-    uses: chanchal-scaler/pr-qa/.github/workflows/run.yml@main
+    uses: scaler-ai/pr-qa/.github/workflows/run.yml@main
     secrets: inherit
